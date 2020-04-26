@@ -1,0 +1,41 @@
+openstack:云计算，云平台的管理项目，这个项目由几个主要的组件完成工作。openstack通过web界面提供资源管理，通过仪表盘管理整个数据中心。
+
+	openstack组件：
+		#Compute(nova):计算服务
+		#Image Service（Glance）：镜像服务
+			Object Storage（swift）:对象存储
+		#Block Strage(cinder):块存储
+		#Networking(neutron):网络服务
+		#Dashboard（Horizon）：仪表盘
+		#Identify service（keystone）:认证服务
+			Orchestration（heat）:编排工具
+			Telemetry（ceilometer）:监控，虚拟机消耗资源的监控
+		#Database Service(trove):数据库服务
+			Data processing（sahara）:数据处理
+
+keystone:负责身份管理与授权，实现用户的身份认证，基于role的权限管理，以及openstack其他组件访问地址和安全策略管理。
+
+功能：
+	用户管理：
+		Accont:用户管理
+		Authentication：身份认证管理
+		Authorization：授权管理
+
+		认证服务关键字：
+			user：一个人，系统或服务在openstack中的数字表示，已经登录的用户分配的令牌环可以访问资源，用户可直接分批额特定的租户。
+			credentials：用于确认用户的身份的数据，例如：用户和密码，apiKey，
+			Authorization：认证
+			Token：用户访问OpenStack api 和资源
+			Tenant（租户）：一组组织或鼓励的资源的容器，租户可以组织或隔离认证对象。根据服运营的要求，一个租户可以映射到客户，账户，组织或项目。
+
+			service：openstack服务，例如计算服务nova，对象存储服（swift），或镜像服务glance，。它提供一个或多个端点提供给用户访问资源和执行操作。
+
+			Endpoint：一个用户访问某个服务的可以通过网络访问的地址，通常是一Url地址。
+
+			role：角色，
+
+			keystone client：keystone命令行工具。
+
+
+
+

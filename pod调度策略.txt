@@ -1,0 +1,189 @@
+
+pod调度策略：
+	筛选过程主要有sheduler组件实现node的选择
+		源码地址： https://github.com/kubernetes/kubernetes/tree/release-1.16/pkg/scheduler
+	筛选过程：
+		预选：pod资源限额(limits)与资源需求(requets)。
+		优选：priority:优先级调度
+		选定：随机选择。
+
+		预选策略：
+			#节点条件
+			checkNodeCondition：
+			#通用预选
+			GeneralPredicates：
+			默认启用
+				HostName:主机名。
+				PodfitsHostPorts: 主机端口选择 （spec.containers.ports.hostPort）
+				MatchNodeSelector: (spec.pod.nodeSelector)
+				poFitsResourcesd: （检查pod的资源需求是否能被节点满足。）
+				PodToleratesNodeTaints: (检查spec.pod.tolerations可容忍污点，是否完全包含节点上的污点)
+				CheckNodeLablePresense:(检查标签的存在性)
+
+				#云计算存储卷
+				MaxEBSVolumeCount: (最大默认是39)
+				MaxGCEPDVVolimeCount:(最大默认是16)
+				MaxAzureDiskCount：（最大默认16）
+
+				CheckVolumeBing:
+				NoVolumeZoneConfict:
+
+				CheckNodeMemoryPressure:检查资源节点内存是否处于压力过大
+				CheckNodePIDPressure: PID压力
+				CheckNodeDiskPressure: 磁盘压力
+
+				MatchInterPodAffinity：亲和度检查
+			默认没有启用：
+				NoDiskConfict：检查pod依赖的存储卷是否满足需求
+				PodToleratesNodeExecuteTaints：（节点的污点属性改变时，不能容忍任何不匹配的污点存在，pod会调离该节点）
+				CheckServiceAffinity：（相同的service pod调度到相邻的node，或同一个node）
+
+
+		优选函数：
+		 源码：
+			https://github.com/kubernetes/kubernetes/tree/release-1.16/pkg/scheduler/algorithm/priorities
+
+
+			函数：
+				#默认启用
+				least_requests.go 
+					（cpu计算方式：得分 =（CPU总容量-已经被占用的CPU）*10/ CPU总量）
+					（memory计算计方式：得分 =（memory总容量-已经被占用的memory）*10/ memory总量）
+				BalancceResourceAllocation.go
+					cpu和内存资源占用率相近的胜出。内存与cpu得分相近的胜出
+				NodePreferAvoidPods：
+					节点注解信息，存在shcduler.
+				Tainttolerattion:
+					节点污染能够接受的污染程度进行评估。将pod对象的spec.tolarate 列表项与节点的taint列表进行匹配度检查，匹配条目越多，得分越低。
+				SelectorSpreading：
+					标签选择器的分散度，
+				InterPodAffinity：
+					匹配条目越多，得分越高。
+				NodeAffinity：
+					节点亲和性进行评估，标签匹配越多，优先级越高。
+
+				#默认没有启用
+				Mostrequests.go
+					与Less_requets相反，资源越少占用越少，优先级高
+				NodeLabel：
+					标签匹配，标签匹配越多，优先级越高。
+				ImageLocality：
+					该节点上是否存在pod运行需要的Image，根据Image的体积大小之和进行评估，越大优先级越多
+
+
+
+
+pod.spec:
+节点选择类：
+	1,直接选择节点
+	nodeName: <string> 
+	2，标签属性节点选择
+	nodeSelector <map[string]string>
+		app: nginx_web
+
+亲和度选择类
+
+
+	3，亲和度调度
+		affinity <Object>
+		1,	nodeAffinity <Object> 
+				preferredDuringSchedulingIgnoredDuringExecution <[]Object>（倾向）
+					- preference <Object>: --required--
+						matchExpressions/macthFields:
+						- 
+						-
+						-
+					  weight:[integer(整数)]
+
+				requiredDuringSchedulingIgnoredDuringExecution <[]Object>（必须）
+					nodeSelectTerms <[]object>:
+					- matchExpressions\matchFields<[]object>
+
+		pod亲和性在进行判断之前，需要建立pod是否在同一个node标准，比如node节点上有一个标签rack=rack1（在同一个机架）。对应参数：topologyKey
+			#pod更倾向与运行在一起			
+		2,	podAffinity <Object>
+				preferredDuringSchedulingIgnoredDuringExecution <[]Object>（倾向）
+					- podAffinityTerm <object>
+						labelSeletor <object>:
+						namespace <string>:
+						#拓扑关键字
+						topologyKey<string>:
+					  weight:[integer]
+				requiredDuringSchedulingIgnoredDuringExecution <[]Object>（必须）
+					- labelSelector:
+					  namespace:
+					  topologyKey：
+
+			#pod倾向于与那些pod分开运行（不倾向于）
+		3,	podAntiAffinity <Object>
+				- podAffinityTerm <object>
+						labelSeletor <object>:
+						namespace <string>:
+						#位置拓扑关键字
+						topologyKey<string>:
+
+					  weight:[integer]
+				requiredDuringSchedulingIgnoredDuringExecution <[]Object>（必须）
+					- labelSelector:
+					  namespace:
+					  topologyKey：
+
+
+		4,tolerate（容忍度） and taint(污点)
+			污点：定义在node上的键值数据。属于node属性。pod定义对node的污点的容忍度。
+			管理： kubectl taint NODE NAME KEY_1=VAL_1:TAINT_EFFECT_1 ... KEY_N=VAL_N:TAINT_EFFECT_N [options]
+				eg: kubectl taint node node01 node-production=production:NoSchedule
+
+			 	1,node节点污点属性： node.spec.taints
+
+			 		taints<[]object>
+
+			 			#对pod排斥等级effect
+			 			string：
+			 				1，NoSchedule：不能调度，仅影响调度过程。对现有的pod不影响。 
+			 				2，PreferNoSchedule：一般不能调度，但是没有其他节点可以调度可以调度到本node，仅影响调度过程。对现有的pod不影响。
+			 				3，NoExecute：不能调度，当污点属性改变时，对原有的pod也会产生排斥。
+			 		- effect <string>  --required--:
+			 		  key <string> --required--:
+			 		  value <string>:
+
+			 	2，pod容忍，对node节点的污点的容忍。根据容忍度调度pod到节点上。
+			 		pod.spec.tolerations
+			 			tolerations <[]object>
+			 			- effect: [NoSchedule|PreferNoschedule|NoExcute]
+			 			  key:<srting>
+			 			  # operator:{Exists|Equal}
+			 			  	Equal: pod容忍的node节点上的污点值与自己的指定的value相同
+			 			  	Exsits：node存在污点即可，无需指定其value值。
+			 			  operate:<string>
+			 			  tolerationSeconds:<integer>
+			 			  value:<string>
+
+
+		5，优先级调度
+			优先级调度类
+				kubectl explain priorityClass
+			创建优先级类
+			--
+				apiverion: Schedule.k8s.io/v1
+				kind: PriorityClass
+				metadata:
+					name: highPriority
+				value: 1000
+				globalDefault: False
+				decriptions: "this is a highPriority"
+			使用优先级类
+			--
+				apiVersion: v1
+				kind: pod
+				metadata:
+					name: app
+					namespace: default
+				spec:
+					containers:
+					- name: app
+					  image: nginx
+					priorityClassName: highPriority
+
+
+

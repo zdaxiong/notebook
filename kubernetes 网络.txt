@@ -1,0 +1,97 @@
+kubernetes 网络：
+	1,容器与容器之间(None,bridg,contianer...)
+	2,pod与pod通信,(pod与pod处于同一个网段，直接可以通信)
+	3，pod与service通信（kube-proxy）
+	4，service与外部客户端进行通信(ingress,nodePort)
+
+	container network interface(CNI插件)：fannel,calico,canel,kube-router
+
+	解决方案实现方式：
+		虚拟网桥：用软件的方式实现一对虚拟网卡。
+		多路复用：MACVlan，一个网卡存在多个MAC。
+		硬件交换：物理网卡虚拟出多个网卡，实现物理级别的不同网段的数据交换。
+
+	k8s使用CNI网络插件流程：
+		1，使用kubelet初始化时到/etc/cni/net.d/*.conf 文件。
+		2，使用配置文件初始化网络。
+
+fannel 插件: 
+	支持多种后端：
+		1，vxlan:基于本地路由，外部基于二层网络隧道通信实现。
+		2，DirecoryRouting:直接路由，（要求集群node处于同一个二层网络，中间没有其他路由）
+		3,host-gw:只能通过同一二层网络通信
+		4,udp:广播
+	fannel运行原理：
+		1，任何部署了kubelet的node都需要部署。kubelet。
+		 初始化pod和容器时需要通过其实现网络。
+		2，默认网段10.244.0.0/16
+				支持255个子网。
+
+
+				要实现不同网络通信在初始化fannel时，需要进行修改其config文件：
+
+				 net-conf.json: |
+    				{
+      					"Network": "10.244.0.0/16",
+      					"Backend": {
+      					#"Tpye":"hosy_gw"
+       					 "Type": "vxlan"
+       					#"directorouting":true
+     					 }
+    				}
+    			vxlan与directorouting可以同时使用，当不能使用二层网络直接路由到其他主机时，切换到vxlan模式。
+
+
+ canel: flannel结合calico网络实现的平行网络空间。fannel不能实现平行空间的网络的控制，可以用cannel实现。
+ 网址：https://docs.projectcalico.org/getting-started/kubernetes/flannel/flannel
+
+    配置：
+    1，Installing with the Kubernetes API datastore (recommended)
+    		依靠api-service的数据存储etcd
+
+    	curl https://docs.projectcalico.org/manifests/canal.yaml -O
+    	kubectl apply -f canal.yaml
+
+    2，自己独立的etcd（Installing with the etcd datastore）
+
+    curl https://docs.projectcalico.org/manifests/canal-etcd.yaml -O
+    kubectl apply -f canal-etcd.yaml
+
+
+network Policy :
+
+	apiVersion: networking.k8s.io/v1
+	kind: NetworkPolicy
+	metadata:
+		name:
+		namespace: dev
+	spec:
+		podSelector:
+		- matchExpressions: [  ]
+		ingress:
+		- from:
+			- ipBlock
+				cDir:
+				except:
+			-namespace:
+			-podSelector:
+		- port:
+			- protcol: tcp/udp
+			- port:80
+		egrenss:
+		- {}
+		policyTypes:
+		- Egress
+		- ingress
+	网络策略:
+		1,基于pod级别实现的，同一namespace的pod也有可能因为networkPolicy实现不能互相访问。
+		2,同一namespace一般策略：
+			1，拒绝所有出栈与入栈。
+			2，放行所有同一名称空间的放在的所有pod
+				ingress
+				- from:
+					-namespace:
+				egress:
+				- from:
+					- namespace:
+		3,跨名称空间的重新部署策略。

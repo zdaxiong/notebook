@@ -1,0 +1,64 @@
+资源指标： 
+	metrics-server。
+自定义资源指标：prometheus，k8s-promtheus-adapter
+
+新一代的监控架构：
+	1，核心指标流水线：由kubelet，metrics-service以及API server提供的api组成，核心指标CPU累计使用率，内存实时使用率，pod的资源占用率以及容器的磁盘使用。
+	2，监控流水线：用于从系统手机各种指标数据并提供给终端用户，存储熊以及HPA，它们包含核心指标以及许多非核心指标。非核心指标本身不能被K8s所解析
+
+
+metrics-server:
+	第三方的API-server，和k8s的api做了聚合，中间优聚合器（kube-aggregater）将metrics做了聚合，使用户可以像调用k8s api一样的调用metrics-server。
+
+metrics-server部署：
+		https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/metrics-server
+	获取yaml文件进行配置。
+
+promethus 
+	c/s结构：
+	server：采集节点上的信息
+
+
+HPA（Horizontal pod Autoscaler 水平自动扩展）
+
+命令行：
+	kubectl autoscale deployment POD_NAME --min=1 --max=5 --cpu-precent=60
+	HPA支持三种api
+	autoscaling/v1
+	autocaling/v1bate1
+	autoscaling/v2bate2
+-----------------------------------
+	apiVersion: atuoscaling/v1
+	kind: HorizontalPodAutoscaler
+	metadata:
+		name: my_HPA
+	spec:
+		maxReplicas:10
+		minReplicas:1
+		scaleTargetRef:
+			apiVerion: apps/v1
+			kind: Deployment
+			name: nginx_web
+-----------------------------------
+apiVersion: atuoscaling/v1bate1
+	kind: HorizontalPodAutoscaler
+	metadata:
+		name: my_HPA
+	spec:
+		maxReplicas:10
+		minReplicas:1
+		scaleTargetRef:
+			apiVerion: apps/v1
+			kind: Deployment
+			name: nginx_web
+		metrics:
+		- type: Resource
+		   resource:
+		   		name: cpu
+		   		targetAverageUtilization:50
+		- type: Resource
+			resource:
+				name: memory
+				targetAverageValue: 50mi
+
+
